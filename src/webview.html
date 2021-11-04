@@ -169,6 +169,19 @@
             type="text"
             placeholder="An additional info or link (e.g. 'http://example.com')"
           />
+
+          <hr />
+
+          <label for="solution">Solution</label>
+          <input
+            id="solution"
+            name="solution"
+            type="text"
+            placeholder="Solution or commentary by the author to the review comment"
+          />
+
+          <label for="solved">Solved?</label>
+          <input id="solved" name="solved" type="checkbox" title="Mark this review as being dealt with (solved)" />
         </div>
         <div class="col-right">
           <label id="priority">Priority</label>
@@ -199,7 +212,7 @@
             />
           </div>
 
-          <p>
+          <p class="actions-left">
             <label for="private">Private</label>
             <input
               id="private"
@@ -259,6 +272,8 @@
       document.getElementById('additional').value = event.data.comment.additional || '';
       document.getElementById('category').value = event.data.comment.category;
       document.getElementById('private').checked = Number(event.data.comment.private) !== 0;
+      document.getElementById('solution').value = event.data.comment.solution || '';
+      document.getElementById('solved').checked = Number(event.data.comment.solved) !== 0;
 
       if (event.data.comment.priority) {
         document.getElementById('prio-' + event.data.comment.priority).checked = true;
@@ -320,6 +335,8 @@
       const category = document.getElementById('category').value;
       const additional = document.getElementById('additional').value;
       const private = document.getElementById('private').checked ? 1 : 0;
+      const solution = document.getElementById('solution').value;
+      const solved = document.getElementById('solved').checked ? 1 : 0;
 
       const formData = {
         sha: '',
@@ -332,6 +349,8 @@
         category,
         additional,
         private: Number(private),
+        solution,
+        solved: Number(solved),
         code: '',
       };
 

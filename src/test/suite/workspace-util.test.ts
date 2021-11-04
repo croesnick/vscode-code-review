@@ -300,6 +300,8 @@ suite('Workspace Utils', () => {
       additional: 'string',
       id: 'string',
       private: 0,
+      solution: 'string',
+      solved: 0,
     };
     const testData: CsvEntry[] = [
       {

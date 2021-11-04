@@ -33,6 +33,8 @@ export interface CsvEntry {
    * 1 = private
    */
   private: number;
+  solution: string;
+  solved: number;
 }
 
 /**
@@ -77,6 +79,8 @@ export class CsvStructure {
     'additional',
     'id',
     'private',
+    'solution',
+    'solved',
   ];
 
   /**
@@ -88,6 +92,8 @@ export class CsvStructure {
   private static readonly defaults: Map<string, () => any> = new Map([
     ['id', () => uuidv4()],
     ['private', () => 0],
+    ['solution', () => ''],
+    ['solved', () => 0],
   ]);
 
   /**
@@ -103,6 +109,8 @@ export class CsvStructure {
     ['additional', (additional: any) => (additional ? escapeDoubleQuotesForCsv(additional) : '')],
     ['category', (category: any) => category || ''],
     ['private', (priv: any) => priv || 0],
+    ['solution', (solution: any) => (solution ? escapeDoubleQuotesForCsv(solution) : '')],
+    ['solved', (solved: any) => solved || 0],
   ]);
 
   /**
@@ -175,6 +183,7 @@ export class CsvStructure {
     comment.comment = unescapeEndOfLineFromCsv(comment.comment);
     comment.priority = Number(comment.priority);
     comment.private = Number(comment.private);
+    comment.solved = Number(comment.solved);
 
     return comment;
   }

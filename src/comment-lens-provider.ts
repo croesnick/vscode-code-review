@@ -20,11 +20,12 @@ export class CommentLensProvider implements CodeLensProvider {
             };
             const csvRef: CsvEntry | undefined = csvEntry;
             const prio = Number(csvEntry.priority); // be sure the value is a number
+            const solved = Number(csvEntry.solved);
             const priorityString = prio
               ? ` | Priority: ${csvEntry.priority}${symbolForPriority(Number(csvEntry.priority))}`
               : '';
             const command: Command = {
-              title: `Code Review: ${csvEntry.title}${priorityString}`,
+              title: `Code Review: ${solved === 1 ? '✔ ' : ''}${csvEntry.title}${priorityString}`,
               tooltip: csvEntry.comment,
               command: 'codeReview.openSelection',
               arguments: [fileSection, csvRef],
