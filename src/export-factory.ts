@@ -35,7 +35,7 @@ import { themeColorForPriority } from './utils/editor-utils';
 const gitCommitId = require('git-commit-id');
 
 export class ExportFactory {
-  private defaultFileName = 'code-review';
+  // private defaultFileName = 'code-review.csv';
   private groupBy: GroupBy;
   private includeCodeSelection = false;
   private includePrivateComments = false;
@@ -232,10 +232,11 @@ export class ExportFactory {
    * for trying out: https://stackblitz.com/edit/code-review-template
    */
   constructor(private context: ExtensionContext, private workspaceRoot: string, private generator: FileGenerator) {
-    const configFileName = workspace.getConfiguration().get('code-review.filename') as string;
-    if (configFileName) {
-      this.defaultFileName = configFileName;
-    }
+    // FIXME We already got the `FileGenerator`. Why the hell do we need to duplicate this file logic (partially) here?
+    // const configFileName = workspace.getConfiguration().get('code-review.filename') as string;
+    // if (configFileName) {
+    //   this.defaultFileName = configFileName;
+    // }
     let groupByConfig = workspace.getConfiguration().get('code-review.groupBy') as string;
     if (!groupByConfig || groupByConfig === '-') {
       groupByConfig = Group.filename;
@@ -252,12 +253,15 @@ export class ExportFactory {
     this.setFilterByFilename(this.filterByFilename, true);
   }
 
+  // FIXME Rename to `absoluteFilePath`
   get basePath(): string {
-    return toAbsolutePath(this.workspaceRoot, this.defaultFileName);
+    return this.generator.absoluteReviewFilePath;
+    // return toAbsolutePath(this.workspaceRoot, this.defaultFileName);
   }
 
+  // TODO Remove function
   get inputFile(): string {
-    return `${this.basePath}.csv`;
+    return this.basePath;
   }
 
   /**
