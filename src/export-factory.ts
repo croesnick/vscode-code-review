@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import stripIndent from 'strip-indent';
+import { stripIndent } from 'common-tags';
 import handlebars from 'handlebars';
 
 import {
@@ -32,7 +32,7 @@ import { CsvEntry, CsvStructure } from './model';
 import { CommentListEntry } from './comment-list-entry';
 import { FileGenerator } from './file-generator';
 import { themeColorForPriority } from './utils/editor-utils';
-const gitCommitId = require('git-commit-id');
+import { gitRevision } from './vcs-provider';
 
 export class ExportFactory {
   private defaultFileName = 'code-review';
@@ -479,17 +479,17 @@ export class ExportFactory {
   public setFilterByCommit(state: boolean): boolean {
     this.filterByCommit = state;
     if (this.filterByCommit) {
-      try {
-        const gitDirectory = workspace.getConfiguration().get('code-review.gitDirectory') as string;
-        const gitRepositoryPath = path.resolve(this.workspaceRoot, gitDirectory);
+      gitRevision('.', this.workspaceRoot).then(
+        (revision: string) => {
+          this.currentCommitId = revision;
+        },
+        (error: string) => {
+          this.filterByCommit = false;
+          this.currentCommitId = null;
 
-        this.currentCommitId = gitCommitId({ cwd: gitRepositoryPath });
-      } catch (error) {
-        this.filterByCommit = false;
-        this.currentCommitId = null;
-
-        console.log('Not in a git repository. Disabling filter by commit', error);
-      }
+          console.log('Not in a git repository. Disabling filter by commit.', error);
+        },
+      );
     } else {
       this.currentCommitId = null;
     }
