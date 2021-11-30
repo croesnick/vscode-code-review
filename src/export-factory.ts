@@ -296,6 +296,7 @@ export class ExportFactory {
   getComments(commentGroupedInFile: CommentListEntry): Thenable<CommentListEntry[]> {
     const result = commentGroupedInFile.data.lines
       .filter((entry: CsvEntry) => this.isCommentEligible(entry))
+      .filter((entry: CsvEntry) => entry.solved === 1)
       .map((entry: CsvEntry) => {
         entry = CsvStructure.finalizeParse(entry);
 
@@ -365,7 +366,7 @@ export class ExportFactory {
         .on('error', () => this.handleError)
         .on('data', (row: CsvEntry) => {
           if (this.isCommentEligible(row)) {
-            entries.push(row);
+            entries.push(CsvStructure.finalizeParse(row));
           }
         })
         .on('end', () => {
