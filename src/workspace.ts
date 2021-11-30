@@ -46,6 +46,8 @@ export class WorkspaceContext {
 
   private openSelectionRegistration!: Disposable;
   private addNoteRegistration!: Disposable;
+  private filterBySolvedEnableRegistration!: Disposable;
+  private filterBySolvedDisableRegistration!: Disposable;
   private filterByCommitEnableRegistration!: Disposable;
   private filterByCommitDisableRegistration!: Disposable;
   private filterByFilenameEnableRegistration!: Disposable;
@@ -232,6 +234,14 @@ export class WorkspaceContext {
       this.webview.addComment(this.commentService);
       this.commentsProvider.refresh();
       this.updateDecorations();
+    });
+
+    this.filterBySolvedEnableRegistration = commands.registerCommand('codeReview.filterBySolvedEnable', () => {
+      this.setFilterBySolved(true);
+    });
+
+    this.filterBySolvedDisableRegistration = commands.registerCommand('codeReview.filterBySolvedDisable', () => {
+      this.setFilterBySolved(false);
     });
 
     this.filterByCommitEnableRegistration = commands.registerCommand('codeReview.filterByCommitEnable', () => {
@@ -435,6 +445,8 @@ export class WorkspaceContext {
       this.openSelectionRegistration,
       this.addNoteRegistration,
       this.deleteNoteRegistration,
+      this.filterBySolvedEnableRegistration,
+      this.filterBySolvedDisableRegistration,
       this.filterByCommitEnableRegistration,
       this.filterByCommitDisableRegistration,
       this.filterByFilenameEnableRegistration,
@@ -457,6 +469,8 @@ export class WorkspaceContext {
     this.openSelectionRegistration.dispose();
     this.addNoteRegistration.dispose();
     this.deleteNoteRegistration.dispose();
+    this.filterBySolvedEnableRegistration.dispose();
+    this.filterBySolvedDisableRegistration.dispose();
     this.filterByCommitEnableRegistration.dispose();
     this.filterByCommitDisableRegistration.dispose();
     this.filterByFilenameEnableRegistration.dispose();
@@ -485,6 +499,11 @@ export class WorkspaceContext {
 
   private setFilterByCommit(state: boolean) {
     this.exportFactory.setFilterByCommit(state);
+    this.commentsProvider.refresh();
+  }
+
+  private setFilterBySolved(state: boolean) {
+    this.exportFactory.setFilterBySolved(state);
     this.commentsProvider.refresh();
   }
 }

@@ -94,6 +94,22 @@
         }
       },
       {
+        "command": "codeReview.filterBySolvedEnable",
+        "title": "Code Review: View unsolved comments",
+        "icon": {
+          "light": "images/icons/filter-off-light.svg",
+          "dark": "images/icons/filter-off-dark.svg"
+        }
+      },
+      {
+        "command": "codeReview.filterBySolvedDisable",
+        "title": "Code Review: View solved and unsolved comments",
+        "icon": {
+          "light": "images/icons/filter-on-light.svg",
+          "dark": "images/icons/filter-on-dark.svg"
+        }
+      },
+      {
         "command": "codeReview.filterByFilenameEnable",
         "title": "Code Review: View comments from the current file",
         "icon": {

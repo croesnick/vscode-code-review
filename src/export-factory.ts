@@ -44,6 +44,7 @@ export class ExportFactory {
   private currentCommitId: string | null = null;
   private filterByFilename: boolean = false;
   private currentFilename: string | null = null;
+  private filterBySolved: boolean = false;
 
   /**
    * Get comment eligibility
@@ -296,7 +297,7 @@ export class ExportFactory {
   getComments(commentGroupedInFile: CommentListEntry): Thenable<CommentListEntry[]> {
     const result = commentGroupedInFile.data.lines
       .filter((entry: CsvEntry) => this.isCommentEligible(entry))
-      .filter((entry: CsvEntry) => entry.solved === 1)
+      .filter((entry: CsvEntry) => !this.filterBySolved || entry.solved === 0)
       .map((entry: CsvEntry) => {
         entry = CsvStructure.finalizeParse(entry);
 
@@ -537,5 +538,9 @@ export class ExportFactory {
     }
 
     return changedState || changedFile;
+  }
+
+  public setFilterBySolved(state: boolean) {
+    this.filterBySolved = state;
   }
 }
