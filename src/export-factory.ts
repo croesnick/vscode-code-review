@@ -542,5 +542,6 @@ export class ExportFactory {
 
   public setFilterBySolved(state: boolean) {
     this.filterBySolved = state;
+    commands.executeCommand('setContext', 'isFilteredBySolved', state);
   }
 }

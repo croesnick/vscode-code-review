@@ -95,7 +95,7 @@
       },
       {
         "command": "codeReview.filterBySolvedEnable",
-        "title": "Code Review: View unsolved comments",
+        "title": "Code Review: View unsolved comments only",
         "icon": {
           "light": "images/icons/filter-off-light.svg",
           "dark": "images/icons/filter-off-dark.svg"
@@ -192,6 +192,16 @@
         {
           "command": "codeReview.filterByFilenameDisable",
           "when": "view == code-review.list && isFilteredByFilename",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codeReview.filterBySolvedEnable",
+          "when": "view == code-review.list && !isFilteredBySolved",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codeReview.filterBySolvedDisable",
+          "when": "view == code-review.list && isFilteredBySolved",
           "group": "navigation@2"
         }
       ],
