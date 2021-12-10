@@ -26,8 +26,9 @@ import { ReviewFileExportSection } from './interfaces';
 import { CsvEntry } from './model';
 import { CommentListEntry } from './comment-list-entry';
 import { ImportFactory, ConflictMode } from './import-factory';
-import { gutterDecorations } from './utils/decoration-utils';
+import { Decorations } from './utils/decoration-utils';
 import { CommentLensProvider } from './comment-lens-provider';
+import { vcsKind, VcsKind } from './vcs-provider';
 
 const checkForCodeReviewFile = (fileName: string) => {
   commands.executeCommand('setContext', 'codeReview:displayCodeReviewExplorer', fs.existsSync(fileName));
@@ -42,7 +43,6 @@ export class WorkspaceContext {
   private webview: WebViewComponent;
   private commentsProvider!: CommentsProvider;
   private fileWatcher!: FileSystemWatcher;
-  private gutterIconDecorations: TextEditorDecorationType[] = [];
 
   private openSelectionRegistration!: Disposable;
   private addNoteRegistration!: Disposable;
@@ -52,6 +52,7 @@ export class WorkspaceContext {
   private filterByCommitDisableRegistration!: Disposable;
   private filterByFilenameEnableRegistration!: Disposable;
   private filterByFilenameDisableRegistration!: Disposable;
+  private setReviewFileSelectedCsvRegistration!: Disposable;
   private deleteNoteRegistration!: Disposable;
   private exportAsHtmlWithDefaultTemplateRegistration!: Disposable;
   private exportAsHtmlWithHandlebarsTemplateRegistration!: Disposable;
@@ -61,6 +62,7 @@ export class WorkspaceContext {
   private exportAsJsonRegistration!: Disposable;
   private importFromJsonRegistration!: Disposable;
   private commentCodeLensProviderregistration!: Disposable;
+  private decorations: Decorations;
 
   constructor(private context: ExtensionContext, public workspaceRoot: string) {
     // create a new file if not already exist
@@ -72,6 +74,7 @@ export class WorkspaceContext {
       ? Uri.file(defaultConfigurationTemplatePath)
       : Uri.parse(context.asAbsolutePath(path.join('dist', 'template.default.hbs')));
 
+    this.decorations = new Decorations(context);
     this.setup();
   }
 
@@ -82,11 +85,23 @@ export class WorkspaceContext {
     this.updateReviewCommentService();
     this.updateCommentsProvider();
     this.setupFileWatcher();
-    this.watchGitSwitch();
+    this.watchConfiguration();
     this.watchActiveEditor();
     this.watchForFileChanges();
     new CommentView(this.commentsProvider);
     this.updateDecorations();
+
+    if (vcsKind() === VcsKind.git) {
+      this.watchGitSwitch();
+    }
+  }
+
+  watchConfiguration() {
+    workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('code-review.filename')) {
+        this.refreshCommands();
+      }
+    });
   }
 
   watchActiveEditor() {
@@ -99,11 +114,14 @@ export class WorkspaceContext {
     });
   }
 
-  highlightCommentsInActiveEditor(editor: TextEditor) {
-    // clear previous gutter decorations
-    this.gutterIconDecorations.forEach((decoration) => {
-      decoration.dispose();
+  clearVisibleDecorations() {
+    window.visibleTextEditors.forEach((editor: TextEditor) => {
+      this.decorations.clear(editor);
     });
+  }
+
+  highlightCommentsInActiveEditor(editor: TextEditor) {
+    this.decorations.clear(editor);
 
     this.exportFactory.getFilesContainingComments().then((fileEntries) => {
       const matchingFile = fileEntries.find((file) => editor.document.fileName.endsWith(file.label));
@@ -111,7 +129,8 @@ export class WorkspaceContext {
         // iterate over all comments associated with this file
         this.exportFactory.getComments(matchingFile).then((comments) => {
           // comments[0] as we only need a single comment related to a line to identify the place where to put it
-          this.gutterIconDecorations = gutterDecorations(this.context, comments[0].data.lines, editor);
+          this.decorations.underlineDecoration(comments[0].data.lines, editor);
+          this.decorations.commentIconDecoration(comments[0].data.lines, editor);
         });
       }
     });
@@ -121,7 +140,7 @@ export class WorkspaceContext {
    * Refresh comment view on git switch
    */
   watchGitSwitch() {
-    const gitDirectory = (workspace.getConfiguration().get('code-review.gitDirectory') as string) ?? '.';
+    const gitDirectory = (workspace.getConfiguration().get('code-review.vcs.git.directory') as string) ?? '.';
     const gitHeadPath = path.resolve(gitDirectory, '.git/HEAD');
     const gitWatcher = workspace.createFileSystemWatcher(`**${gitHeadPath}`);
     gitWatcher.onDidChange(() => {
@@ -135,7 +154,7 @@ export class WorkspaceContext {
    * setup review file watcher
    */
   setupFileWatcher() {
-    this.fileWatcher = workspace.createFileSystemWatcher(`**/${this.generator.reviewFileName}`);
+    this.fileWatcher = workspace.createFileSystemWatcher(`**/${this.generator.reviewFilePath}`);
   }
 
   /**
@@ -143,17 +162,17 @@ export class WorkspaceContext {
    */
   watchForFileChanges() {
     // refresh comment view on manual changes in the review file
-    checkForCodeReviewFile(this.generator.reviewFilePath);
+    checkForCodeReviewFile(this.generator.absoluteReviewFilePath);
     this.fileWatcher.onDidChange(() => {
       this.commentsProvider.refresh();
     });
     this.fileWatcher.onDidCreate(() => {
       this.commentsProvider.refresh();
-      checkForCodeReviewFile(this.generator.reviewFilePath);
+      checkForCodeReviewFile(this.generator.absoluteReviewFilePath);
     });
     this.fileWatcher.onDidDelete(() => {
       this.commentsProvider.refresh();
-      checkForCodeReviewFile(this.generator.reviewFilePath);
+      checkForCodeReviewFile(this.generator.absoluteReviewFilePath);
     });
   }
 
@@ -179,7 +198,7 @@ export class WorkspaceContext {
   }
 
   updateReviewCommentService() {
-    this.commentService = new ReviewCommentService(this.generator.reviewFilePath, this.workspaceRoot);
+    this.commentService = new ReviewCommentService(this.generator.absoluteReviewFilePath, this.workspaceRoot);
   }
 
   updateCommentsProvider() {
@@ -258,6 +277,18 @@ export class WorkspaceContext {
 
     this.filterByFilenameDisableRegistration = commands.registerCommand('codeReview.filterByFilenameDisable', () => {
       this.setFilterByFilename(false);
+    });
+
+    this.setReviewFileSelectedCsvRegistration = commands.registerCommand('codeReview.setReviewFileSelectedCsv', () => {
+      if (!window.activeTextEditor) {
+        window.showErrorMessage(`No CSV selected. Open a code-review CSV and re-run the command.`);
+        return;
+      }
+
+      const file = window.activeTextEditor.document.uri;
+      workspace.getConfiguration().update('code-review.filename', file.fsPath, null, undefined);
+
+      window.showInformationMessage(`Set code-review file to: ${file.fsPath}`);
     });
 
     /**
@@ -380,7 +411,7 @@ export class WorkspaceContext {
                   public detail?: string | undefined,
                   public picked?: boolean | undefined,
                   public alwaysShow?: boolean | undefined,
-                ) {}
+                ) { }
               }
 
               window
@@ -451,15 +482,23 @@ export class WorkspaceContext {
       this.filterByCommitDisableRegistration,
       this.filterByFilenameEnableRegistration,
       this.filterByFilenameDisableRegistration,
+      this.setReviewFileSelectedCsvRegistration,
       this.exportAsHtmlWithDefaultTemplateRegistration,
       this.exportAsHtmlWithHandlebarsTemplateRegistration,
-      this.exportAsGitLabImportableCsvRegistration,
-      this.exportAsGitHubImportableCsvRegistration,
       this.exportAsJiraImportableCsvRegistration,
       this.exportAsJsonRegistration,
       this.importFromJsonRegistration,
       this.commentCodeLensProviderregistration,
     );
+
+    if (vcsKind() === VcsKind.git) {
+      this.context.subscriptions.push(
+        this.filterByCommitEnableRegistration,
+        this.filterByCommitDisableRegistration,
+        this.exportAsGitLabImportableCsvRegistration,
+        this.exportAsGitHubImportableCsvRegistration,
+      );
+    }
   }
 
   /**
@@ -475,18 +514,27 @@ export class WorkspaceContext {
     this.filterByCommitDisableRegistration.dispose();
     this.filterByFilenameEnableRegistration.dispose();
     this.filterByFilenameDisableRegistration.dispose();
+    this.setReviewFileSelectedCsvRegistration.dispose();
     this.exportAsHtmlWithDefaultTemplateRegistration.dispose();
     this.exportAsHtmlWithHandlebarsTemplateRegistration.dispose();
-    this.exportAsGitLabImportableCsvRegistration.dispose();
-    this.exportAsGitHubImportableCsvRegistration.dispose();
+
     this.exportAsJiraImportableCsvRegistration.dispose();
     this.exportAsJsonRegistration.dispose();
     this.importFromJsonRegistration.dispose();
     this.commentCodeLensProviderregistration.dispose();
+
+    if (vcsKind() === VcsKind.git) {
+      this.filterByCommitEnableRegistration.dispose();
+      this.filterByCommitDisableRegistration.dispose();
+      this.exportAsGitLabImportableCsvRegistration.dispose();
+      this.exportAsGitHubImportableCsvRegistration.dispose();
+    }
+
     this.updateSubscriptions();
   }
 
   refreshCommands() {
+    this.clearVisibleDecorations();
     this.unregisterCommands();
     this.setup();
     this.registerCommands();

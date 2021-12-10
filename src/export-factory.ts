@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import stripIndent from 'strip-indent';
+import { stripIndent } from 'common-tags';
 import handlebars from 'handlebars';
 
 import {
@@ -13,7 +13,8 @@ import {
   ThemeIcon,
   commands,
 } from 'vscode';
-const parseFile = require('@fast-csv/parse').parseFile;
+
+import { parseFile } from '@fast-csv/parse';
 import { EOL } from 'os';
 import { encode, decode } from 'js-base64';
 
@@ -24,18 +25,71 @@ import {
   sortLineSelections,
   rangeFromStringDefinition,
   escapeEndOfLineForCsv,
-  standardizeFilename,
+  relativeToWorkspace,
   splitStringDefinition,
 } from './utils/workspace-util';
 import { ReviewFileExportSection, GroupBy, ExportFormat, ExportMap, Group } from './interfaces';
 import { CsvEntry, CsvStructure } from './model';
 import { CommentListEntry } from './comment-list-entry';
 import { FileGenerator } from './file-generator';
-import { themeColorForPriority } from './utils/editor-utils';
+import { gitRevision } from './vcs-provider';
+import { Location, parseLocation, themeColorForPriority } from './utils/editor-utils';
 const gitCommitId = require('git-commit-id');
 
+type SortT = -1 | 0 | 1;
+
+// TODO GH-123 Switch from CsvEntry as main data model to an internal one an map over that here.
+//             Rationale: Why should the explorer view care about a CsvEntry format?
+interface Model extends CsvEntry {
+  location?: Location;
+}
+
+/**
+ * Compares two models regarding their location information. If neither of both has location information, then both
+ * are treated as equal. Models with location information come before models without.
+ * If both models have location information, than the following holds:
+ *
+ *    lhs < rhs :<=> (lhs.lineStart, lhs.columStart) < (rhs.lineStart, rhs.columStart)
+ *
+ * i.e., they are compared lexicographically.
+ *
+ * @param lhs Left-hand side of the comparison
+ * @param rhs Right-hand side of the comparison
+ *
+ * @returns -1 if lhs < rhs; 1 if lhs > rhs; 0 otherwise.
+ */
+export const compareLocation = (lhs?: Location, rhs?: Location): SortT => {
+  if (lhs === undefined && rhs === undefined) {
+    return 0;
+  }
+  if (lhs === undefined) {
+    return 1;
+  }
+  if (rhs === undefined) {
+    return -1;
+  }
+
+  if (lhs.lineStart < rhs.lineStart) {
+    return -1;
+  } else if (lhs.lineStart > rhs.lineStart) {
+    return 1;
+  }
+
+  // Now: lhs.location.lineStart === rhs.location.lineStart
+  if (lhs.columnStart < rhs.columnStart) {
+    return -1;
+  } else if (lhs.columnStart > rhs.columnStart) {
+    return 1;
+  }
+
+  return 0;
+};
+
+export const compare = (lhs: Model, rhs: Model): SortT => {
+  return compareLocation(lhs.location, rhs.location);
+};
+
 export class ExportFactory {
-  private defaultFileName = 'code-review';
   private groupBy: GroupBy;
   private includeCodeSelection = false;
   private includePrivateComments = false;
@@ -52,7 +106,7 @@ export class ExportFactory {
    */
   private isCommentEligible(entry: CsvEntry): boolean {
     return (
-      (this.currentCommitId === null || entry.sha === this.currentCommitId) &&
+      (this.currentCommitId === null || entry.revision === this.currentCommitId) &&
       (this.currentFilename === null || entry.filename === this.currentFilename)
     );
   }
@@ -115,13 +169,13 @@ export class ExportFactory {
           const title = row.title ? row.title.substring(0, 255) : descShort;
           const fileRow = row.url ? `- file: [${row.filename}](${row.url})${EOL}` : `${row.filename}${EOL}`;
           const linesRow = `- lines: ${row.lines}${EOL}`;
-          const shaRow = row.sha ? `- SHA: ${row.sha}${EOL}${EOL}` : '';
+          const revRow = row.revision ? `- SHA: ${row.revision}${EOL}${EOL}` : '';
           const commentSection = `## Comment${EOL}${row.comment}${EOL}`;
           const additional = row.additional ? `## Additional information${EOL}${row.additional}${EOL}` : '';
           const priority = row.priority ? `## Priority${EOL}${this.priorityName(row.priority)}${EOL}${EOL}` : '';
           const category = row.category ? `## Category${EOL}${row.category}${EOL}${EOL}` : '';
           const code = row.code ? `${EOL}## Source Code${EOL}${EOL}\`\`\`${EOL}${row.code}\`\`\`${EOL}` : '';
-          const description = `${priority}${category}## Affected${EOL}${fileRow}${linesRow}${shaRow}${commentSection}${EOL}${additional}${code}`;
+          const description = `${priority}${category}## Affected${EOL}${fileRow}${linesRow}${revRow}${commentSection}${EOL}${additional}${code}`;
           fs.appendFileSync(outputFile, `"[code review] ${title}","${description}"${EOL}`);
           return row;
         },
@@ -149,14 +203,14 @@ export class ExportFactory {
 
           const fileRow = row.url ? `- file: [${row.filename}](${row.url})${EOL}` : `${row.filename}${EOL}`;
           const linesRow = `- lines: ${row.lines}${EOL}`;
-          const shaRow = row.sha ? `- SHA: ${row.sha}${EOL}${EOL}` : '';
+          const revRow = row.revision ? `- SHA: ${row.revision}${EOL}${EOL}` : '';
           const commentSection = `## Comment${EOL}${row.comment}${EOL}`;
           const additional = row.additional ? `## Additional information${EOL}${row.additional}${EOL}` : '';
           const priority = row.priority ? `## Priority${EOL}${this.priorityName(row.priority)}${EOL}${EOL}` : '';
           const category = row.category ? `## Category${EOL}${row.category}${EOL}${EOL}` : '';
           const code = row.code ? `${EOL}## Source Code${EOL}${EOL}\`\`\`${EOL}${row.code}\`\`\`${EOL}` : '';
 
-          const description = `${priority}${category}## Affected${EOL}${fileRow}${linesRow}${shaRow}${commentSection}${EOL}${additional}${code}`;
+          const description = `${priority}${category}## Affected${EOL}${fileRow}${linesRow}${revRow}${commentSection}${EOL}${additional}${code}`;
 
           fs.appendFileSync(outputFile, `"[code review] ${title}","${description}","code-review","open",""${EOL}`);
           return row;
@@ -174,7 +228,7 @@ export class ExportFactory {
         writeFileHeader: (outputFile: string) => {
           fs.writeFileSync(
             outputFile,
-            `Summary,Description,Priority,sha,filename,url,lines,title,category,comment,additional${EOL}`,
+            `Summary,Description,Priority,revision,filename,url,lines,title,category,comment,additional${EOL}`,
           );
         },
         handleData: (outputFile: string, row: CsvEntry): CsvEntry => {
@@ -188,17 +242,17 @@ export class ExportFactory {
 
           const fileRow = row.url ? `* file: [${row.filename}|${row.url}]${EOL}` : `${row.filename}${EOL}`;
           const linesRow = `* lines: ${row.lines}${EOL}`;
-          const shaRow = row.sha ? `* SHA: ${row.sha}${EOL}${EOL}` : '';
+          const revRow = row.revision ? `* SHA: ${row.revision}${EOL}${EOL}` : '';
           const categorySection = `h2. Category${EOL}${row.category}${EOL}${EOL}`;
           const commentSection = `h2. Comment${EOL}${row.comment}${EOL}`;
           const additional = row.additional ? `h2. Additional information${EOL}${row.additional}${EOL}` : '';
           const code = row.code ? `${EOL}h2. Source Code${EOL}${EOL}{code}${EOL}${row.code}{code}${EOL}` : '';
 
-          const description = `h2. Affected${EOL}${fileRow}${linesRow}${shaRow}${categorySection}${commentSection}${EOL}${additional}${code}`;
+          const description = `h2. Affected${EOL}${fileRow}${linesRow}${revRow}${categorySection}${commentSection}${EOL}${additional}${code}`;
 
           fs.appendFileSync(
             outputFile,
-            `"[code review] ${title}","${description}","${this.priorityName(row.priority)}","${row.sha}","${
+            `"[code review] ${title}","${description}","${this.priorityName(row.priority)}","${row.revision}","${
               row.filename
             }","${row.url}","${row.lines}","${row.title}","${row.category}","${row.comment}","${row.additional}"${EOL}`,
           );
@@ -233,10 +287,6 @@ export class ExportFactory {
    * for trying out: https://stackblitz.com/edit/code-review-template
    */
   constructor(private context: ExtensionContext, private workspaceRoot: string, private generator: FileGenerator) {
-    const configFileName = workspace.getConfiguration().get('code-review.filename') as string;
-    if (configFileName) {
-      this.defaultFileName = configFileName;
-    }
     let groupByConfig = workspace.getConfiguration().get('code-review.groupBy') as string;
     if (!groupByConfig || groupByConfig === '-') {
       groupByConfig = Group.filename;
@@ -253,12 +303,15 @@ export class ExportFactory {
     this.setFilterByFilename(this.filterByFilename, true);
   }
 
+  // FIXME Rename to `absoluteFilePath`
   get basePath(): string {
-    return toAbsolutePath(this.workspaceRoot, this.defaultFileName);
+    return this.generator.absoluteReviewFilePath;
+    // return toAbsolutePath(this.workspaceRoot, this.defaultFileName);
   }
 
+  // TODO Remove function
   get inputFile(): string {
-    return `${this.basePath}.csv`;
+    return this.basePath;
   }
 
   /**
@@ -295,32 +348,38 @@ export class ExportFactory {
    * get the comments as CommentListEntry for VSCode view
    */
   getComments(commentGroupedInFile: CommentListEntry): Thenable<CommentListEntry[]> {
-    const result = commentGroupedInFile.data.lines
+    let entries = commentGroupedInFile.data.lines
       .filter((entry: CsvEntry) => this.isCommentEligible(entry))
       .filter((entry: CsvEntry) => !this.filterBySolved || entry.solved === 0)
       .map((entry: CsvEntry) => {
         entry = CsvStructure.finalizeParse(entry);
+        (entry as Model).location = parseLocation(entry.lines);
 
-        const item = new CommentListEntry(
-          entry.id,
-          entry.title,
-          entry.comment,
-          entry.comment,
-          TreeItemCollapsibleState.None,
-          commentGroupedInFile.data,
-          entry.priority,
-          entry.private,
-        );
-        item.contextValue = 'comment';
-        item.command = {
-          command: 'codeReview.openSelection',
-          title: 'Open comment',
-          arguments: [commentGroupedInFile.data, entry],
-        };
-        item.iconPath = this.getIcon(entry.priority, entry.private);
-
-        return item;
+        return entry;
       });
+
+    entries.sort(compare);
+    const result = entries.map((entry: Model) => {
+      const item = new CommentListEntry(
+        entry.id,
+        entry.title,
+        entry.comment,
+        entry.comment,
+        TreeItemCollapsibleState.None,
+        commentGroupedInFile.data,
+        entry.priority,
+        entry.private,
+      );
+      item.contextValue = 'comment';
+      item.command = {
+        command: 'codeReview.openSelection',
+        title: 'Open comment',
+        arguments: [commentGroupedInFile.data, entry],
+      };
+      item.iconPath = this.getIcon(entry.priority, entry.private);
+
+      return item;
+    });
 
     return Promise.resolve(result);
   }
@@ -481,17 +540,17 @@ export class ExportFactory {
   public setFilterByCommit(state: boolean): boolean {
     this.filterByCommit = state;
     if (this.filterByCommit) {
-      try {
-        const gitDirectory = workspace.getConfiguration().get('code-review.gitDirectory') as string;
-        const gitRepositoryPath = path.resolve(this.workspaceRoot, gitDirectory);
+      gitRevision('.', this.workspaceRoot).then(
+        (revision: string) => {
+          this.currentCommitId = revision;
+        },
+        (error: string) => {
+          this.filterByCommit = false;
+          this.currentCommitId = null;
 
-        this.currentCommitId = gitCommitId({ cwd: gitRepositoryPath });
-      } catch (error) {
-        this.filterByCommit = false;
-        this.currentCommitId = null;
-
-        console.log('Not in a git repository. Disabling filter by commit', error);
-      }
+          console.log('Not in a git repository. Disabling filter by commit.', error);
+        },
+      );
     } else {
       this.currentCommitId = null;
     }
@@ -523,7 +582,7 @@ export class ExportFactory {
     if (this.filterByFilename) {
       let filename = window.activeTextEditor?.document.fileName;
       if (filename) {
-        filename = standardizeFilename(this.workspaceRoot, filename);
+        filename = relativeToWorkspace(this.workspaceRoot, filename);
         if (this.currentFilename !== filename) {
           changedFile = true;
           this.currentFilename = filename;
