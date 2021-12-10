@@ -94,6 +94,22 @@
         }
       },
       {
+        "command": "codeReview.filterBySolvedEnable",
+        "title": "Code Review: View unsolved comments only",
+        "icon": {
+          "light": "images/icons/filter-off-light.svg",
+          "dark": "images/icons/filter-off-dark.svg"
+        }
+      },
+      {
+        "command": "codeReview.filterBySolvedDisable",
+        "title": "Code Review: View solved and unsolved comments",
+        "icon": {
+          "light": "images/icons/filter-on-light.svg",
+          "dark": "images/icons/filter-on-dark.svg"
+        }
+      },
+      {
         "command": "codeReview.filterByFilenameEnable",
         "title": "Code Review: View comments from the current file",
         "icon": {
@@ -180,6 +196,16 @@
         {
           "command": "codeReview.filterByFilenameDisable",
           "when": "view == code-review.list && isFilteredByFilename",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codeReview.filterBySolvedEnable",
+          "when": "view == code-review.list && !isFilteredBySolved",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codeReview.filterBySolvedDisable",
+          "when": "view == code-review.list && isFilteredBySolved",
           "group": "navigation@2"
         }
       ],
