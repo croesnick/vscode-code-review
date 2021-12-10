@@ -97,16 +97,16 @@
         "command": "codeReview.filterBySolvedEnable",
         "title": "Code Review: View unsolved comments only",
         "icon": {
-          "light": "images/icons/filter-off-light.svg",
-          "dark": "images/icons/filter-off-dark.svg"
+          "light": "images/icons/solved-filter-off-light.svg",
+          "dark": "images/icons/solved-filter-off-dark.svg"
         }
       },
       {
         "command": "codeReview.filterBySolvedDisable",
         "title": "Code Review: View solved and unsolved comments",
         "icon": {
-          "light": "images/icons/filter-on-light.svg",
-          "dark": "images/icons/filter-on-dark.svg"
+          "light": "images/icons/solved-filter-on-light.svg",
+          "dark": "images/icons/solved-filter-on-dark.svg"
         }
       },
       {
