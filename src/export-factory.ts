@@ -350,7 +350,7 @@ export class ExportFactory {
   getComments(commentGroupedInFile: CommentListEntry): Thenable<CommentListEntry[]> {
     let entries = commentGroupedInFile.data.lines
       .filter((entry: CsvEntry) => this.isCommentEligible(entry))
-      .filter((entry: CsvEntry) => !this.filterBySolved || entry.solved === 0)
+      .filter((entry: CsvEntry) => !this.filterBySolved || entry.solved === 0 || entry.solution === '')
       .map((entry: CsvEntry) => {
         entry = CsvStructure.finalizeParse(entry);
         (entry as Model).location = parseLocation(entry.lines);
